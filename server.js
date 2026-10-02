@@ -1,11 +1,12 @@
-﻿const express=require('express'); const swaggerUi=require('swagger-ui-express'); const openapi=require('./openapi.json');
+const express=require('express'); const swaggerUi=require('swagger-ui-express'); const openapi=require('./openapi.json');
+const db = require('./db');
 const app=express(); const PORT=3000; app.use(express.json());
 let tasks=[{id:1,title:'Learn REST APIs',done:false},{id:2,title:'Build CRUD endpoints',done:false},{id:3,title:'Test with Swagger',done:true}]; let nextId=4;
 app.get('/',(req,res)=>res.json({name:'Task API',version:'1.0',endpoints:['/tasks']}));
 app.get('/health',(req,res)=>res.json({status:'ok'}));
 app.get('/tasks',(req,res)=>res.status(200).json(tasks));
-app.get('/tasks/:id',(req,res)=>{const id=Number(req.params.id),task=tasks.find(t=>t.id===id);if(!task)return res.status(404).json({error:Task  not found});res.status(200).json(task)});
+app.get('/tasks/:id',(req,res)=>{const id=Number(req.params.id),task=tasks.find(t=>t.id===id);if(!task)return res.status(404).json({error:'Task not found'});res.status(200).json(task)});
 app.post('/tasks',(req,res)=>{const {title}=req.body;if(typeof title!=='string'||!title.trim())return res.status(400).json({error:'title is required and must not be empty'});const task={id:nextId++,title:title.trim(),done:false};tasks.push(task);res.status(201).json(task)});
-app.put('/tasks/:id',(req,res)=>{const id=Number(req.params.id),task=tasks.find(t=>t.id===id);if(!task)return res.status(404).json({error:Task  not found});const {title,done}=req.body;if((title!==undefined&&(typeof title!=='string'||!title.trim()))||(done!==undefined&&typeof done!=='boolean'))return res.status(400).json({error:'title must be a non-empty string and done must be a boolean'});if(title!==undefined)task.title=title.trim();if(done!==undefined)task.done=done;res.status(200).json(task)});
-app.delete('/tasks/:id',(req,res)=>{const id=Number(req.params.id),i=tasks.findIndex(t=>t.id===id);if(i===-1)return res.status(404).json({error:Task  not found});tasks.splice(i,1);res.status(204).send()});
-app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>console.log(Task API: http://localhost: | Swagger: http://localhost:/docs));
+app.put('/tasks/:id',(req,res)=>{const id=Number(req.params.id),task=tasks.find(t=>t.id===id);if(!task)return res.status(404).json({error:'Task not found'});const {title,done}=req.body;if((title!==undefined&&(typeof title!=='string'||!title.trim()))||(done!==undefined&&typeof done!=='boolean'))return res.status(400).json({error:'title must be a non-empty string and done must be a boolean'});if(title!==undefined)task.title=title.trim();if(done!==undefined)task.done=done;res.status(200).json(task)});
+app.delete('/tasks/:id',(req,res)=>{const id=Number(req.params.id),i=tasks.findIndex(t=>t.id===id);if(i===-1)return res.status(404).json({error:'Task not found'});tasks.splice(i,1);res.status(204).send()});
+app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`));
