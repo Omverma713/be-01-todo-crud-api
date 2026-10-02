@@ -2,6 +2,10 @@
 const app=express();
 const PORT=3000;
 app.use(express.json());
+let tasks=[{id:1,title:'Learn REST APIs',done:false},{id:2,title:'Build CRUD endpoints',done:false},{id:3,title:'Test with Swagger',done:true}];
+let nextId=4;
 app.get('/',(req,res)=>res.json({name:'Task API',version:'1.0',endpoints:['/tasks']}));
 app.get('/health',(req,res)=>res.json({status:'ok'}));
+app.get('/tasks',(req,res)=>res.status(200).json(tasks));
+app.get('/tasks/:id',(req,res)=>{const id=Number(req.params.id),task=tasks.find(t=>t.id===id);if(!task)return res.status(404).json({error:Task  not found});res.status(200).json(task)});
 app.listen(PORT,()=>console.log(Task API: http://localhost:));
