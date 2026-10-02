@@ -27,6 +27,34 @@ app.post('/tasks', (req, res) => {
   };
   res.status(201).json(task);
 });
-app.put('/tasks/:id',(req,res)=>{const id=Number(req.params.id),task=tasks.find(t=>t.id===id);if(!task)return res.status(404).json({error:'Task not found'});const {title,done}=req.body;if((title!==undefined&&(typeof title!=='string'||!title.trim()))||(done!==undefined&&typeof done!=='boolean'))return res.status(400).json({error:'title must be a non-empty string and done must be a boolean'});if(title!==undefined)task.title=title.trim();if(done!==undefined)task.done=done;res.status(200).json(task)});
-app.delete('/tasks/:id',(req,res)=>{const id=Number(req.params.id),i=tasks.findIndex(t=>t.id===id);if(i===-1)return res.status(404).json({error:'Task not found'});tasks.splice(i,1);res.status(204).send()});
+app.put('/tasks/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!existing) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+
+  const { title, done } = req.body;
+  if (
+    (title !== undefined && (typeof title !== 'string' || !title.trim())) ||
+    (done !== undefined && typeof done !== 'boolean')
+  ) {
+    return res.status(400).json({ error: 'title must be a non-empty string and done must be a boolean' });
+  }
+
+  const updatedTitle = title !== undefined ? title.trim() : existing.title;
+  const updatedDone = done !== undefined ? (done ? 1 : 0) : existing.done;
+
+  db.prepare('UPDATE tasks SET title = ?, done = ? WHERE id = ?').run(updatedTitle, updatedDone, req.params.id);
+
+  const updatedTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  res.status(200).json(updatedTask);
+});
+
+app.delete('/tasks/:id', (req, res) => {
+  const info = db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
+  if (info.changes === 0) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+  res.status(204).send();
+});
 app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`));
