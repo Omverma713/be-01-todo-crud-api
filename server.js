@@ -8,4 +8,5 @@ app.get('/',(req,res)=>res.json({name:'Task API',version:'1.0',endpoints:['/task
 app.get('/health',(req,res)=>res.json({status:'ok'}));
 app.get('/tasks',(req,res)=>res.status(200).json(tasks));
 app.get('/tasks/:id',(req,res)=>{const id=Number(req.params.id),task=tasks.find(t=>t.id===id);if(!task)return res.status(404).json({error:Task  not found});res.status(200).json(task)});
+app.post('/tasks',(req,res)=>{const {title}=req.body;if(typeof title!=='string'||!title.trim())return res.status(400).json({error:'title is required and must not be empty'});const task={id:nextId++,title:title.trim(),done:false};tasks.push(task);res.status(201).json(task)});
 app.listen(PORT,()=>console.log(Task API: http://localhost:));
