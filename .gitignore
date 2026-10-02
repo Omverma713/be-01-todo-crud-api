@@ -6,3 +6,11 @@ yarn-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
+
+# SQLite database and runtime WAL files
+tasks.db
+tasks.db-shm
+tasks.db-wal
+*.db
+*.db-shm
+*.db-wal

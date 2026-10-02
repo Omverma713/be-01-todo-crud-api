@@ -13,7 +13,20 @@ app.get('/tasks/:id', (req, res) => {
   if (!task) return res.status(404).json({ error: 'Task not found' });
   res.status(200).json(task);
 });
-app.post('/tasks',(req,res)=>{const {title}=req.body;if(typeof title!=='string'||!title.trim())return res.status(400).json({error:'title is required and must not be empty'});const task={id:nextId++,title:title.trim(),done:false};tasks.push(task);res.status(201).json(task)});
+app.post('/tasks', (req, res) => {
+  const { title } = req.body;
+  if (typeof title !== 'string' || !title.trim()) {
+    return res.status(400).json({ error: 'title is required and must not be empty' });
+  }
+  const stmt = db.prepare('INSERT INTO tasks (title, done) VALUES (?, ?)');
+  const info = stmt.run(title.trim(), 0);
+  const task = {
+    id: Number(info.lastInsertRowid),
+    title: title.trim(),
+    done: 0
+  };
+  res.status(201).json(task);
+});
 app.put('/tasks/:id',(req,res)=>{const id=Number(req.params.id),task=tasks.find(t=>t.id===id);if(!task)return res.status(404).json({error:'Task not found'});const {title,done}=req.body;if((title!==undefined&&(typeof title!=='string'||!title.trim()))||(done!==undefined&&typeof done!=='boolean'))return res.status(400).json({error:'title must be a non-empty string and done must be a boolean'});if(title!==undefined)task.title=title.trim();if(done!==undefined)task.done=done;res.status(200).json(task)});
 app.delete('/tasks/:id',(req,res)=>{const id=Number(req.params.id),i=tasks.findIndex(t=>t.id===id);if(i===-1)return res.status(404).json({error:'Task not found'});tasks.splice(i,1);res.status(204).send()});
 app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`));
