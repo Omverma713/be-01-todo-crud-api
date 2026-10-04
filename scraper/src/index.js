@@ -1,10 +1,11 @@
 /**
  * The Polite Scraper - Week 5 Assignment A9
- * Stage 1: Fetch Once, Cache Once
+ * Stage 2: Discover Three Catalogue Pages
  */
 
 const fs = require('fs');
 const path = require('path');
+const cheerio = require('cheerio');
 
 const BASE_URL = 'https://books.toscrape.com/';
 const CATALOGUE_PAGE_1 = 'https://books.toscrape.com/catalogue/page-1.html';
@@ -68,15 +69,70 @@ async function fetchWithCache(url, cacheFileName) {
   return { html, fromCache: false, size };
 }
 
-async function runStage1() {
-  console.log('=== Running Stage 1: Fetch Once, Cache Once ===');
-  const result = await fetchWithCache(CATALOGUE_PAGE_1, 'catalogue-page-1.html');
-  return result;
+/**
+ * Extracts book detail page URLs and the next catalogue link from a catalogue page HTML.
+ */
+function parseCataloguePage(html, pageUrl) {
+  const $ = cheerio.load(html);
+  const bookUrls = [];
+
+  $('article.product_pod h3 a').each((_, el) => {
+    const relativeHref = $(el).attr('href');
+    if (relativeHref) {
+      const absoluteUrl = new URL(relativeHref, pageUrl).href;
+      bookUrls.push(absoluteUrl);
+    }
+  });
+
+  const nextRel = $('li.next a').attr('href');
+  const nextUrl = nextRel ? new URL(nextRel, pageUrl).href : null;
+
+  return { bookUrls, nextUrl };
+}
+
+/**
+ * Discovers catalogue pages up to maxPages and collects all book URLs.
+ */
+async function discoverCataloguePages(startUrl = CATALOGUE_PAGE_1, maxPages = 3) {
+  let currentUrl = startUrl;
+  let pageIndex = 1;
+  const discoveredBookUrls = [];
+
+  while (currentUrl && pageIndex <= maxPages) {
+    const cacheFileName = `catalogue-page-${pageIndex}.html`;
+    const { html } = await fetchWithCache(currentUrl, cacheFileName);
+    const { bookUrls, nextUrl } = parseCataloguePage(html, currentUrl);
+
+    discoveredBookUrls.push(...bookUrls);
+    currentUrl = nextUrl;
+    pageIndex++;
+  }
+
+  const cataloguePagesCount = pageIndex - 1;
+  const discoveredCount = discoveredBookUrls.length;
+  const uniqueUrls = Array.from(new Set(discoveredBookUrls));
+  const uniqueCount = uniqueUrls.length;
+
+  console.log(`catalogue_pages=${cataloguePagesCount}`);
+  console.log(`discovered=${discoveredCount}`);
+  console.log(`unique_urls=${uniqueCount}`);
+
+  return {
+    cataloguePagesCount,
+    discoveredCount,
+    uniqueCount,
+    uniqueUrls
+  };
+}
+
+async function runStage2() {
+  console.log('=== Running Stage 2: Discover Three Catalogue Pages ===');
+  return await discoverCataloguePages(CATALOGUE_PAGE_1, 3);
 }
 
 if (require.main === module) {
-  runStage1().catch((err) => {
-    console.error('Stage 1 Error:', err.message);
+  runStage2().catch((err) => {
+    console.error('Stage 2 Error:', err.message);
     process.exit(1);
   });
 }
@@ -87,5 +143,7 @@ module.exports = {
   USER_AGENT,
   CACHE_DIR,
   fetchWithCache,
-  runStage1
+  parseCataloguePage,
+  discoverCataloguePages,
+  runStage2
 };
