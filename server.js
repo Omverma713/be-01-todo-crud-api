@@ -173,7 +173,24 @@ app.get('/protected/dashboard', requireAuth, (req, res) => {
 const triageRouter = require('./src/routes/triage');
 app.use('/triage', triageRouter);
 
-app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>{
-  console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`);
-  console.log(`Server running and connected to Supabase`);
-});
+// --- Capstone: 10x Solution - Support Ticket Triage & Resolution Platform ---
+const capstoneRouter = require('./src/capstone/routes');
+const { startBackgroundJobs } = require('./src/capstone/jobs');
+app.use('/api', capstoneRouter);
+
+// Start background monitor if not running tests
+if (process.env.NODE_ENV !== 'test') {
+  startBackgroundJobs();
+}
+
+app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi));
+
+if (require.main === module) {
+  app.listen(PORT,()=>{
+    console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`);
+    console.log(`Capstone API: http://localhost:${PORT}/api/tickets`);
+    console.log(`Server running and connected to Supabase`);
+  });
+}
+
+module.exports = app;
