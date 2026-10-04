@@ -1,0 +1,1 @@
+{"timestamp":"2026-10-04T06:03:40.067Z","input":"Test support message that triggered failure","prompt_version":"triage-v1","error":"Invalid category enum value","raw_model_output":"{\"category\": \"invalid_value\"}","repair_attempts":1}
