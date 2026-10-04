@@ -105,6 +105,33 @@ app.post('/auth/login', async (req, res) => {
   });
 });
 
+// --- Stage 2: Public & Protected Gates ---
+
+// GET /public/info
+app.get('/public/info', (req, res) => {
+  res.status(200).json({
+    message: 'Welcome stranger! This info is public.'
+  });
+});
+
+// GET /protected/profile (unverified in Stage 2)
+app.get('/protected/profile', (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  if (!token || !token.trim()) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  res.status(200).json({
+    message: 'Access token presented successfully. (Unverified in Stage 2)'
+  });
+});
+
 app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>{
   console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`);
   console.log(`Server running and connected to Supabase`);
