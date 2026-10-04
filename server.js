@@ -169,6 +169,10 @@ app.get('/protected/dashboard', requireAuth, (req, res) => {
   });
 });
 
+// --- Week 7 Assignment A17: LLM Triage Route ---
+const triageRouter = require('./src/routes/triage');
+app.use('/triage', triageRouter);
+
 app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>{
   console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`);
   console.log(`Server running and connected to Supabase`);
