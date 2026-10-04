@@ -1,86 +1,175 @@
-# BE-01 — Task CRUD API (Week 3: SQLite Database Integration)
+# Auth · Login & Protect API (FlyRank Internship — Assignment A4)
 
-Node.js + Express Task CRUD API backed by a persistent SQLite database using `better-sqlite3`.
-
----
-
-## Why SQLite?
-- **Lightweight & Embedded:** Zero-configuration, serverless database engine running directly within the Node.js process.
-- **Single-File Storage:** The entire database resides in a single cross-platform file (`tasks.db`), eliminating the need to set up or manage a separate database server.
-- **ACID Compliant & Fast:** Provides reliable transactions and persistence with WAL (Write-Ahead Logging) mode enabled.
-- **Ideal for Assignment:** Perfect for self-contained, reproducible backend assignments and local development without cloud or container overhead.
+A secure, production-ready authentication and authorization backend built with **Node.js**, **Express**, and **Supabase Auth**. This project demonstrates end-to-end user authentication, JWT verification, reusable Express auth middleware, protected routes, secure session termination, and interactive Swagger UI documentation with Bearer token authorization.
 
 ---
 
-## Database Configuration & Storage
-- **File Location:** The database file is stored in the project root directory as `tasks.db`.
-- **Automatic Initialization:** When the application starts, `db.js` automatically creates `tasks.db` and the `tasks` table if they do not exist.
-- **One-Time Seeding:** If the database is newly created (empty), it automatically seeds exactly 3 initial tasks.
-- **Persistence:** All task creations, updates, and deletions are committed to `tasks.db` and persist across application restarts.
+## 🚀 Features
+
+- **Open Auth System:** User sign-up and password login via Supabase Auth without storing or hashing passwords locally.
+- **JWT Token Verification:** Validates Supabase JWT access tokens directly using `supabase.auth.getUser(token)` — no cryptography secrets hardcoded.
+- **Reusable Auth Middleware:** Centralized `requireAuth` Express middleware protecting sensitive endpoints and populating `req.user`.
+- **Public & Protected Route Architecture:** Open public gates vs. locked endpoints returning only safe user metadata (`id`, `email`, `created_at`).
+- **Session Logout:** Invalidation of authenticated user sessions returning `204 No Content`.
+- **Interactive Swagger UI:** OpenAPI 3.0 specification with `bearerAuth` security scheme and instant Try-it-Out capabilities at `/docs`.
+- **Persistent SQLite Task Storage:** Retains complete task CRUD API with SQLite database persistence.
 
 ---
 
-## Getting Started
+## 🛠️ Tech Stack
 
-### Prerequisites
-- Node.js (v18+)
-- npm
+- **Runtime:** Node.js (v18+)
+- **Framework:** Express 4.x
+- **Authentication & Backend-as-a-Service:** Supabase Auth (`@supabase/supabase-js`)
+- **Database:** SQLite via `better-sqlite3`
+- **Documentation:** Swagger UI (`swagger-ui-express` & OpenAPI 3.0)
+- **Configuration:** `dotenv`
 
-### Installation & Run
+---
+
+## ⚙️ Environment Variables & Configuration
+
+Create a `.env` file in the root directory by copying the provided `.env.example`:
+
 ```bash
-# 1. Install dependencies
+cp .env.example .env
+```
+
+Configure the following variables in `.env`:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_supabase_anon_key
+PORT=3000
+```
+
+> [!IMPORTANT]
+> - Never use or expose the Supabase `service_role` secret key. Only use the public `anon` key.
+> - The `.env` file is excluded from Git via `.gitignore` to prevent leaking credentials.
+
+---
+
+## 📦 Installation & Quick Start
+
+### 1. Install Dependencies
+```bash
 npm install
+```
 
-# 2. Start the application
+### 2. Run the Server
+```bash
 npm start
-
-# Or start in development mode with auto-reload
-npm run dev
 ```
 
-The API will be running at `http://localhost:3000`.
+The API server will start on `http://localhost:3000`.
 
 ---
 
-## API Documentation & Endpoints
+## 📖 API Reference
 
-Interactive Swagger UI documentation is available at:
-**http://localhost:3000/docs**
+### Main Auth & Protected Endpoints
 
-### Endpoints
-| Method | Endpoint | Description | Status Codes |
-|---|---|---|---|
-| `GET` | `/tasks` | List all tasks | `200 OK` |
-| `GET` | `/tasks/:id` | Get single task by ID | `200 OK`, `404 Not Found` |
-| `POST` | `/tasks` | Create a new task | `201 Created`, `400 Bad Request` |
-| `PUT` | `/tasks/:id` | Update task title and/or done state | `200 OK`, `400 Bad Request`, `404 Not Found` |
-| `DELETE` | `/tasks/:id` | Delete task by ID | `204 No Content`, `404 Not Found` |
-| `GET` | `/health` | Health check endpoint | `200 OK` |
+| Method | Endpoint | Description | Auth Required | Status Codes |
+|---|---|---|:---:|---|
+| `POST` | `/auth/signup` | Registers a new user with Supabase | No | `201 Created`, `400 Bad Request` |
+| `POST` | `/auth/login` | Authenticates user; returns JWT `access_token` and `refresh_token` | No | `200 OK`, `400 Bad Request`, `401 Unauthorized` |
+| `POST` | `/auth/logout` | Logs out user and invalidates current session | **Yes** (`Bearer JWT`) | `204 No Content`, `401 Unauthorized` |
+| `GET` | `/protected/profile` | Returns authenticated user safe metadata (`id`, `email`, `created_at`) | **Yes** (`Bearer JWT`) | `200 OK`, `401 Unauthorized` |
+| `GET` | `/protected/dashboard` | Secondary protected route demonstrating reusable middleware | **Yes** (`Bearer JWT`) | `200 OK`, `401 Unauthorized` |
+| `GET` | `/public/info` | Public welcome information open to all visitors | No | `200 OK` |
 
-### Required Status Codes
-- `200`: Successful read or update.
-- `201`: Successful resource creation.
-- `204`: Successful deletion (empty response body).
-- `400`: Invalid request payload / validation error.
-- `404`: Task ID not found.
+### Task CRUD Endpoints (SQLite Persistent)
+
+| Method | Endpoint | Description | Auth Required | Status Codes |
+|---|---|---|:---:|---|
+| `GET` | `/tasks` | Retrieve list of all tasks | No | `200 OK` |
+| `GET` | `/tasks/:id` | Get single task by ID | No | `200 OK`, `404 Not Found` |
+| `POST` | `/tasks` | Create a new task | No | `201 Created`, `400 Bad Request` |
+| `PUT` | `/tasks/:id` | Update task title and/or done status | No | `200 OK`, `400 Bad Request`, `404 Not Found` |
+| `DELETE` | `/tasks/:id` | Delete task by ID | No | `204 No Content`, `404 Not Found` |
+| `GET` | `/health` | Server health check | No | `200 OK` |
 
 ---
 
-## Example SQL Query (Stage 4 Exploration)
+## 🔒 Authentication & Protected Routes
 
-Query to retrieve all completed tasks:
-```sql
-SELECT * FROM tasks WHERE done = 1;
+Protected endpoints require the access token received upon login passed via the standard HTTP `Authorization` header:
+
+```http
+Authorization: Bearer <access_token>
 ```
 
-### Database Viewer Evidence
-![Stage 4 Database Viewer](stage4-sql-completed.png)
+### Error Responses
+- **Missing or malformed Authorization header:**
+  ```json
+  {
+    "error": "Access token required"
+  }
+  ```
+- **Invalid, tampered, or expired JWT:**
+  ```json
+  {
+    "error": "Invalid or expired token"
+  }
+  ```
 
 ---
 
-## Stage Commits History
-- `Stage 0: create SQLite database`
-- `Stage 1: database read endpoints`
-- `Stage 2: insert into database`
-- `Stage 3: update and delete with SQL`
-- `Stage 4: explored SQLite`
+## 📑 Swagger UI & Bearer Authorization
+
+Interactive documentation is served at: **[http://localhost:3000/docs](http://localhost:3000/docs)**
+
+### How to Authenticate in Swagger UI:
+1. Open `http://localhost:3000/docs` in your browser.
+2. Execute `POST /auth/login` to obtain an `access_token`.
+3. Click the green **Authorize 🔓** button at the top right of the Swagger UI.
+4. Paste your JWT access token into the `Value` field for `bearerAuth` (format: `<token>` or `Bearer <token>`).
+5. Click **Authorize** and then **Close**.
+6. All protected routes will now display a locked padlock icon 🔒 and can be tested directly via **Try it out**.
+
+### Swagger UI Interface
+![Swagger UI with Bearer Auth](stage5-swagger-bearer.png)
+
+---
+
+## 🧪 Step-by-Step Reproduction Guide for Fresh Users
+
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/Omverma713/be-01-todo-crud-api.git
+   cd be-01-todo-crud-api
+   ```
+2. **Setup Environment:**
+   ```bash
+   cp .env.example .env
+   # Add your Supabase project URL and anon public key in .env
+   ```
+3. **Install Dependencies & Start:**
+   ```bash
+   npm install
+   npm start
+   ```
+4. **Sign Up & Log In:**
+   ```bash
+   # Sign up
+   curl -X POST http://localhost:3000/auth/signup -H "Content-Type: application/json" -d "{\"email\":\"test@example.com\",\"password\":\"password123\"}"
+
+   # Log in and extract access_token
+   curl -X POST http://localhost:3000/auth/login -H "Content-Type: application/json" -d "{\"email\":\"test@example.com\",\"password\":\"password123\"}"
+   ```
+5. **Access Protected Route:**
+   ```bash
+   curl -H "Authorization: Bearer <ACCESS_TOKEN>" http://localhost:3000/protected/profile
+   ```
+
+---
+
+## 📜 Commit History (Honest Stage Commits)
+
+- `Stage 0: setup server and supabase client`
+- `Stage 1: signup and login routes working`
+- `Stage 2: public route and unverified protected route`
+- `Stage 3: profile route token verification`
+- `Stage 4: auth middleware and logout endpoint`
+- `Stage 5: Swagger UI documentation with bearer auth`
+- `Stage 6: publish to GitHub and write README`
