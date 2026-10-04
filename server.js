@@ -59,6 +59,52 @@ app.delete('/tasks/:id', (req, res) => {
   }
   res.status(204).send();
 });
+// --- Stage 1: Auth Routes ---
+
+// POST /auth/signup
+app.post('/auth/signup', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password || typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password.trim()) {
+    return res.status(400).json({ error: 'email and password are required' });
+  }
+
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password: password.trim()
+  });
+
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  return res.status(201).json(data.user);
+});
+
+// POST /auth/login
+app.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password || typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password.trim()) {
+    return res.status(400).json({ error: 'email and password are required' });
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password: password.trim()
+  });
+
+  if (error) {
+    return res.status(401).json({ error: 'Invalid login credentials' });
+  }
+
+  return res.status(200).json({
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+    user: data.user
+  });
+});
+
 app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>{
   console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`);
   console.log(`Server running and connected to Supabase`);
