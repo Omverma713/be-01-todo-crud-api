@@ -1,1 +1,332 @@
-{"openapi":"3.0.3","info":{"title":"Task API","version":"1.0.0","description":"BE-01 in-memory CRUD API"},"servers":[{"url":"http://localhost:3000"}],"paths":{"/tasks":{"get":{"summary":"List all tasks","responses":{"200":{"description":"OK"}}},"post":{"summary":"Create task","requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TaskInput"},"example":{"title":"Buy milk"}}}},"responses":{"201":{"description":"Created"},"400":{"description":"Bad request"}}}},"/tasks/{id}":{"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}],"get":{"summary":"Get task","responses":{"200":{"description":"OK"},"404":{"description":"Not found"}}},"put":{"summary":"Update task","requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TaskUpdate"},"example":{"title":"Buy oat milk","done":true}}}},"responses":{"200":{"description":"OK"},"400":{"description":"Bad request"},"404":{"description":"Not found"}}},"delete":{"summary":"Delete task","responses":{"204":{"description":"Deleted"},"404":{"description":"Not found"}}}}},"components":{"schemas":{"TaskInput":{"type":"object","required":["title"],"properties":{"title":{"type":"string"}}},"TaskUpdate":{"type":"object","properties":{"title":{"type":"string"},"done":{"type":"boolean"}}}}}}
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Auth · Login & Protect API",
+    "version": "1.0.0",
+    "description": "FlyRank Internship - Week 2 Assignment A4: Auth · Login & Protect with Supabase and Express"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local server"
+    }
+  ],
+  "paths": {
+    "/public/info": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Public info endpoint",
+        "description": "Open endpoint accessible to everyone without authentication.",
+        "responses": {
+          "200": {
+            "description": "Public welcome message",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Welcome stranger! This info is public."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "User sign up",
+        "description": "Registers a new user with Supabase Auth.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created successfully"
+          },
+          "400": {
+            "description": "Missing credentials or registration error"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "User login",
+        "description": "Authenticates user and returns JWT access_token and refresh_token.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful - returns JWT tokens",
+            "content": {
+              "application/json": {
+                "example": {
+                  "access_token": "eyJhbGciOi...",
+                  "refresh_token": "...",
+                  "user": {
+                    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                    "email": "test@example.com"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing email or password"
+          },
+          "401": {
+            "description": "Invalid login credentials"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "User logout",
+        "description": "Invalidates current user session. Requires Bearer JWT token.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successfully logged out"
+          },
+          "401": {
+            "description": "Access token required or invalid token"
+          }
+        }
+      }
+    },
+    "/protected/profile": {
+      "get": {
+        "tags": ["Protected"],
+        "summary": "Get authenticated user profile",
+        "description": "Protected route returning safe user metadata (id, email, created_at).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Safe user metadata",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                  "email": "test@example.com",
+                  "created_at": "2026-10-04T09:40:00.000Z"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token required or invalid/expired token"
+          }
+        }
+      }
+    },
+    "/protected/dashboard": {
+      "get": {
+        "tags": ["Protected"],
+        "summary": "Get user dashboard",
+        "description": "Second protected route demonstrating reusable auth middleware.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard data for authenticated user",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Welcome to your dashboard, test@example.com!",
+                  "user": {
+                    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                    "email": "test@example.com",
+                    "created_at": "2026-10-04T09:40:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access token required or invalid/expired token"
+          }
+        }
+      }
+    },
+    "/tasks": {
+      "get": {
+        "tags": ["Tasks"],
+        "summary": "List all tasks",
+        "responses": {
+          "200": {
+            "description": "List of tasks"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Tasks"],
+        "summary": "Create task",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskInput"
+              },
+              "example": {
+                "title": "Buy milk"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        }
+      }
+    },
+    "/tasks/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "tags": ["Tasks"],
+        "summary": "Get task",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": ["Tasks"],
+        "summary": "Update task",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              },
+              "example": {
+                "title": "Buy oat milk",
+                "done": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Tasks"],
+        "summary": "Delete task",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "AuthInput": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "test@example.com"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "example": "password123"
+          }
+        }
+      },
+      "TaskInput": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Buy milk"
+          }
+        }
+      },
+      "TaskUpdate": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Buy oat milk"
+          },
+          "done": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      }
+    }
+  }
+}
