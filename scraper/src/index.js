@@ -1,6 +1,6 @@
 /**
  * The Polite Scraper - Week 5 Assignment A9
- * Stage 4: Clean, Validate, Store
+ * Stage 5: Survive Failures and Report the Run
  */
 
 const fs = require('fs');
@@ -41,44 +41,74 @@ async function politeDelay() {
 }
 
 /**
- * Fetches a URL with local file caching, timeout, status check, and politeness delay.
+ * Fetches a URL with local file caching, timeout, status check, retry on 5xx/timeout, and politeness delay.
  */
-async function fetchWithCache(url, cacheFileName, silent = true) {
+async function fetchWithCache(url, cacheFileName, stats = null, silent = true) {
   const cachePath = path.join(CACHE_DIR, cacheFileName);
 
   if (fs.existsSync(cachePath)) {
     const html = fs.readFileSync(cachePath, 'utf-8');
     const size = Buffer.byteLength(html, 'utf-8');
+    if (stats) stats.cacheHits++;
     if (!silent) {
       console.log(`CACHE HIT - File: ${cacheFileName} | Response size: ${size} bytes`);
     }
     return { html, fromCache: true, size };
   }
 
-  // Polite delay before real network request
-  await politeDelay();
+  // Attempt fetch with retry logic (retry once for timeout or HTTP 5xx; do NOT retry 404 or 403)
+  const maxAttempts = 2;
+  let lastError = null;
 
-  if (!silent) {
-    console.log(`FETCH - URL: ${url}`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await politeDelay();
+      if (!silent) {
+        console.log(`FETCH (Attempt ${attempt}/${maxAttempts}) - URL: ${url}`);
+      }
+
+      const response = await fetch(url, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
+
+      if (response.status === 404 || response.status === 403) {
+        throw new Error(`HTTP ${response.status} ${response.statusText} (Non-retryable)`);
+      }
+
+      if (response.status >= 500) {
+        throw new Error(`HTTP ${response.status} Server Error (Retryable)`);
+      }
+
+      if (response.status !== 200) {
+        throw new Error(`HTTP ${response.status} Unexpected Status`);
+      }
+
+      const html = await response.text();
+      const size = Buffer.byteLength(html, 'utf-8');
+
+      fs.writeFileSync(cachePath, html, 'utf-8');
+      if (stats) stats.pagesFetched++;
+      if (!silent) {
+        console.log(`FETCH SUCCESS - Saved to: ${cacheFileName} | Response size: ${size} bytes`);
+      }
+
+      return { html, fromCache: false, size };
+    } catch (err) {
+      lastError = err;
+      const isRetryable = !err.message.includes('404') && !err.message.includes('403');
+      if (attempt < maxAttempts && isRetryable) {
+        if (!silent) {
+          console.warn(`[RETRY] Fetch failed for ${url} (${err.message}). Retrying once...`);
+        }
+        await sleep(1000);
+      } else {
+        break;
+      }
+    }
   }
-  const response = await fetch(url, {
-    headers: { 'User-Agent': USER_AGENT },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-  });
 
-  if (response.status !== 200) {
-    throw new Error(`HTTP request failed with status ${response.status}: ${response.statusText}`);
-  }
-
-  const html = await response.text();
-  const size = Buffer.byteLength(html, 'utf-8');
-
-  fs.writeFileSync(cachePath, html, 'utf-8');
-  if (!silent) {
-    console.log(`FETCH SUCCESS - Saved to: ${cacheFileName} | Response size: ${size} bytes`);
-  }
-
-  return { html, fromCache: false, size };
+  throw lastError;
 }
 
 /**
@@ -108,14 +138,14 @@ function parseCataloguePage(html, pageUrl) {
 /**
  * Discovers catalogue pages up to maxPages and collects all book URLs with provenance.
  */
-async function discoverCataloguePages(startUrl = CATALOGUE_PAGE_1, maxPages = 3) {
+async function discoverCataloguePages(startUrl = CATALOGUE_PAGE_1, maxPages = 3, stats = null) {
   let currentUrl = startUrl;
   let pageIndex = 1;
   const discoveredBookEntries = [];
 
   while (currentUrl && pageIndex <= maxPages) {
     const cacheFileName = `catalogue-page-${pageIndex}.html`;
-    const { html } = await fetchWithCache(currentUrl, cacheFileName, false);
+    const { html } = await fetchWithCache(currentUrl, cacheFileName, stats, false);
     const { bookEntries, nextUrl } = parseCataloguePage(html, currentUrl);
 
     discoveredBookEntries.push(...bookEntries);
@@ -234,62 +264,113 @@ function parseBookDetailPage(html, productUrl, sourcePage) {
 }
 
 /**
- * Scrapes, normalizes, validates with Zod, and saves books to output/books.json.
+ * Scrapes, normalizes, validates, survives page failures, and generates run-report.json.
  */
-async function scrapeAndValidateBooks() {
-  const { uniqueEntries } = await discoverCataloguePages(CATALOGUE_PAGE_1, 3);
-  const rawRecordsMap = new Map();
+async function runScraper(options = {}) {
+  const startTime = new Date();
+  const stats = {
+    start_time: startTime.toISOString(),
+    pagesFetched: 0,
+    cacheHits: 0,
+    validRecords: 0,
+    invalidRecords: 0,
+    failedPages: 0
+  };
 
-  for (let i = 0; i < uniqueEntries.length; i++) {
-    const entry = uniqueEntries[i];
-    const cacheFileName = getBookCacheFileName(entry.url);
-    const { html } = await fetchWithCache(entry.url, cacheFileName, true);
-    const rawRecord = parseBookDetailPage(html, entry.url, entry.sourcePage);
-    rawRecordsMap.set(rawRecord.product_url, rawRecord);
-  }
+  const { uniqueEntries } = await discoverCataloguePages(CATALOGUE_PAGE_1, 3, stats);
 
-  const validBooks = [];
-  const invalidRecords = [];
-
-  for (const record of rawRecordsMap.values()) {
-    const parseResult = BookSchema.safeParse(record);
-    if (parseResult.success) {
-      validBooks.push(parseResult.data);
-    } else {
-      invalidRecords.push({
-        record,
-        errors: parseResult.error.format()
+  // If extra fake URLs are supplied for resilience testing
+  const entriesToProcess = [...uniqueEntries];
+  if (options.fakeUrls && Array.isArray(options.fakeUrls)) {
+    for (const fakeUrl of options.fakeUrls) {
+      entriesToProcess.push({
+        url: fakeUrl,
+        sourcePage: CATALOGUE_PAGE_1
       });
     }
   }
 
-  // Save outputs
+  const validBooksMap = new Map();
+  const invalidRecords = [];
+  const failedPageErrors = [];
+
+  for (let i = 0; i < entriesToProcess.length; i++) {
+    const entry = entriesToProcess[i];
+    try {
+      const cacheFileName = getBookCacheFileName(entry.url);
+      const { html } = await fetchWithCache(entry.url, cacheFileName, stats, true);
+      const rawRecord = parseBookDetailPage(html, entry.url, entry.sourcePage);
+
+      const parseResult = BookSchema.safeParse(rawRecord);
+      if (parseResult.success) {
+        validBooksMap.set(parseResult.data.product_url, parseResult.data);
+      } else {
+        invalidRecords.push({
+          record: rawRecord,
+          errors: parseResult.error.format()
+        });
+      }
+    } catch (err) {
+      console.warn(`[SKIP] Page failed: ${entry.url} - Reason: ${err.message}`);
+      stats.failedPages++;
+      failedPageErrors.push({
+        url: entry.url,
+        error: err.message
+      });
+    }
+  }
+
+  const validBooks = Array.from(validBooksMap.values());
+  stats.validRecords = validBooks.length;
+  stats.invalidRecords = invalidRecords.length;
+
+  const endTime = new Date();
+  const durationSeconds = Number(((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2));
+
+  // Build final run report
+  const runReport = {
+    start_time: stats.start_time,
+    end_time: endTime.toISOString(),
+    duration_seconds: durationSeconds,
+    pages_fetched: stats.pagesFetched,
+    cache_hits: stats.cacheHits,
+    valid_records: stats.validRecords,
+    invalid_records: stats.invalidRecords,
+    failed_pages: stats.failedPages
+  };
+
+  // Save files to output/
   const booksPath = path.join(OUTPUT_DIR, 'books.json');
   const errorsPath = path.join(OUTPUT_DIR, 'errors.json');
+  const reportPath = path.join(OUTPUT_DIR, 'run-report.json');
 
   fs.writeFileSync(booksPath, JSON.stringify(validBooks, null, 2), 'utf-8');
   fs.writeFileSync(errorsPath, JSON.stringify(invalidRecords, null, 2), 'utf-8');
+  fs.writeFileSync(reportPath, JSON.stringify(runReport, null, 2), 'utf-8');
 
-  console.log(`detail_pages=${rawRecordsMap.size}`);
-  console.log(`valid_records=${validBooks.length}`);
-  console.log(`invalid_records=${invalidRecords.length}`);
-  console.log(`Saved valid records to: ${booksPath}`);
-  console.log(`Saved error records to: ${errorsPath}`);
+  console.log(`detail_pages=${entriesToProcess.length - stats.failedPages}`);
+  console.log(`valid_records=${stats.validRecords}`);
+  console.log(`invalid_records=${stats.invalidRecords}`);
+  console.log(`failed_pages=${stats.failedPages}`);
+  console.log('Run report:');
+  console.log(JSON.stringify(runReport, null, 2));
 
   return {
     validBooks,
-    invalidRecords
+    invalidRecords,
+    runReport,
+    failedPageErrors
   };
 }
 
-async function runStage4() {
-  console.log('=== Running Stage 4: Clean, Validate, Store ===');
-  return await scrapeAndValidateBooks();
+async function runStage5() {
+  console.log('=== Running Stage 5: Survive Failures and Report the Run ===');
+  return await runScraper();
 }
 
 if (require.main === module) {
-  runStage4().catch((err) => {
-    console.error('Stage 4 Error:', err.message);
+  runStage5().catch((err) => {
+    console.error('Stage 5 Error:', err.message);
     process.exit(1);
   });
 }
@@ -307,6 +388,6 @@ module.exports = {
   discoverCataloguePages,
   getBookCacheFileName,
   parseBookDetailPage,
-  scrapeAndValidateBooks,
-  runStage4
+  runScraper,
+  runStage5
 };
