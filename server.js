@@ -114,8 +114,8 @@ app.get('/public/info', (req, res) => {
   });
 });
 
-// GET /protected/profile (unverified in Stage 2)
-app.get('/protected/profile', (req, res) => {
+// GET /protected/profile (Stage 3: Token Verification with Supabase)
+app.get('/protected/profile', async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -127,8 +127,17 @@ app.get('/protected/profile', (req, res) => {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  res.status(200).json({
-    message: 'Access token presented successfully. (Unverified in Stage 2)'
+  const { data: { user }, error } = await supabase.auth.getUser(token.trim());
+
+  if (error || !user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  // Return safe metadata only: id, email, created_at
+  return res.status(200).json({
+    id: user.id,
+    email: user.email,
+    created_at: user.created_at
   });
 });
 
