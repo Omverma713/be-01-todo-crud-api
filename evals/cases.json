@@ -1,0 +1,82 @@
+[
+  {
+    "name": "billing-duplicate-charge",
+    "input": {
+      "text": "I noticed a duplicate charge on my credit card statement for last month's subscription."
+    },
+    "expected": {
+      "category": "billing",
+      "urgency": "normal"
+    }
+  },
+  {
+    "name": "billing-refund-request",
+    "input": {
+      "text": "Can I please get a full refund for my annual plan? I was billed yesterday but canceled."
+    },
+    "expected": {
+      "category": "billing",
+      "urgency": "normal"
+    }
+  },
+  {
+    "name": "bug-crash-export",
+    "input": {
+      "text": "Every time I click the export CSV button, the entire app crashes with a 500 internal server error."
+    },
+    "expected": {
+      "category": "bug",
+      "urgency": "high"
+    }
+  },
+  {
+    "name": "bug-broken-ui",
+    "input": {
+      "text": "The navigation sidebar is overlapping with the main content on Safari browser."
+    },
+    "expected": {
+      "category": "bug",
+      "urgency": "normal"
+    }
+  },
+  {
+    "name": "feature-dark-mode",
+    "input": {
+      "text": "Would it be possible to add a dark mode theme to reduce eye strain when working late?"
+    },
+    "expected": {
+      "category": "feature",
+      "urgency": "low"
+    }
+  },
+  {
+    "name": "feature-export-pdf",
+    "input": {
+      "text": "It would be great if we could export monthly reports directly to PDF format."
+    },
+    "expected": {
+      "category": "feature",
+      "urgency": "low"
+    }
+  },
+  {
+    "name": "other-greeting",
+    "input": {
+      "text": "Hi there, just saying hello!"
+    },
+    "expected": {
+      "category": "other",
+      "urgency": "low"
+    }
+  },
+  {
+    "name": "other-ambiguous-vague",
+    "input": {
+      "text": "Something seems weird today, not sure what though."
+    },
+    "expected": {
+      "category": "other",
+      "urgency": "low"
+    }
+  }
+]

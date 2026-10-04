@@ -20,17 +20,17 @@ function getStubResponse(text) {
     urgency = lower.includes('twice') || lower.includes('fraud') ? 'high' : 'normal';
     reason = 'Customer is reporting a billing or subscription payment inquiry.';
     confidence = 0.95;
-  } else if (lower.includes('bug') || lower.includes('crash') || lower.includes('broken') || lower.includes('error') || lower.includes('fail')) {
+  } else if (lower.includes('bug') || lower.includes('crash') || lower.includes('broken') || lower.includes('error') || lower.includes('fail') || lower.includes('overlapping') || lower.includes('sidebar')) {
     category = 'bug';
     urgency = lower.includes('crash') || lower.includes('down') ? 'high' : 'normal';
-    reason = 'Customer encountered an application bug or unexpected error.';
+    reason = 'Customer encountered an application bug or UI rendering defect.';
     confidence = 0.92;
-  } else if (lower.includes('feature') || lower.includes('add') || lower.includes('suggest') || lower.includes('request') || lower.includes('dark mode')) {
+  } else if (lower.includes('feature') || lower.includes('add') || lower.includes('suggest') || lower.includes('request') || lower.includes('dark mode') || lower.includes('pdf') || lower.includes('export')) {
     category = 'feature';
     urgency = 'low';
     reason = 'Customer submitted a product feature enhancement request.';
     confidence = 0.90;
-  } else if (text.trim().length < 5 || lower.includes('hello') || lower.includes('hey')) {
+  } else if (text.trim().length < 5 || lower.includes('hello') || lower.includes('hey') || lower.includes('not sure') || lower.includes('weird')) {
     category = 'other';
     urgency = 'low';
     reason = 'Inquiry contains insufficient detail for specific categorization.';
