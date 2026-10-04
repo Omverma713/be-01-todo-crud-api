@@ -1,6 +1,6 @@
 const express = require('express');
 const { TriageInputSchema } = require('../llm/schema');
-const { triageMessage } = require('../llm/service');
+const { triageText } = require('../llm/service');
 const {
   createTicket,
   getTicketById,
@@ -32,16 +32,25 @@ router.post('/tickets', requireCapstoneAuth, async (req, res) => {
     const issue = parsedInput.error.issues[0];
     return res.status(400).json({
       error: 'Invalid input payload',
-      field: issue.path.join('.'),
+      field: issue.path.join('.') || 'text',
       message: issue.message
     });
   }
 
   const { text } = parsedInput.data;
 
+  // Extra guard for whitespace-only strings
+  if (!text || !text.trim()) {
+    return res.status(400).json({
+      error: 'Invalid input payload',
+      field: 'text',
+      message: "Field 'text' must not be empty or whitespace"
+    });
+  }
+
   try {
-    // Run LLM triage (supports stub, repair, quarantine, kill switch)
-    const triageResult = await triageMessage(text);
+    // Run LLM triage (supports stub mode, prompt v1, repair, quarantine, kill switch)
+    const triageResult = await triageText(text);
 
     // Persist to SQLite Database
     const savedTicket = createTicket({
@@ -58,20 +67,21 @@ router.post('/tickets', requireCapstoneAuth, async (req, res) => {
       ticket: savedTicket
     });
   } catch (err) {
-    if (err.status === 422) {
+    const statusCode = err.statusCode || err.status || 500;
+    if (statusCode === 422) {
       return res.status(422).json({
         error: 'Triage payload unprocessable after repair',
         message: err.message
       });
     }
-    if (err.status === 504) {
+    if (statusCode === 504) {
       return res.status(504).json({
         error: 'Gateway Timeout',
         message: 'LLM service did not respond in time'
       });
     }
-    return res.status(500).json({
-      error: 'Internal Server Error',
+    return res.status(statusCode).json({
+      error: 'Triage Processing Error',
       message: err.message
     });
   }
@@ -121,7 +131,7 @@ router.get('/tickets/:id', requireCapstoneAuth, (req, res) => {
 });
 
 // PATCH /api/tickets/:id/status - Update ticket status
-router.patch('/api/tickets/:id/status', requireCapstoneAuth, (req, res) => {
+router.patch('/tickets/:id/status', requireCapstoneAuth, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) {
     return res.status(400).json({ error: 'Invalid ticket ID' });

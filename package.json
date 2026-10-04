@@ -5,6 +5,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "test": "node tests/capstone.test.js",
+    "seed:capstone": "node scripts/seed-capstone.js",
     "scrape": "node scraper/src/index.js"
   },
   "dependencies": {
