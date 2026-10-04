@@ -1,11 +1,12 @@
 /**
  * The Polite Scraper - Week 5 Assignment A9
- * Stage 3: Extract Raw Book Details
+ * Stage 4: Clean, Validate, Store
  */
 
 const fs = require('fs');
 const path = require('path');
 const cheerio = require('cheerio');
+const { z } = require('zod');
 
 const BASE_URL = 'https://books.toscrape.com/';
 const CATALOGUE_PAGE_1 = 'https://books.toscrape.com/catalogue/page-1.html';
@@ -13,10 +14,15 @@ const USER_AGENT = 'FlyRankInternship-A9/1.0 (+https://github.com/Omverma713/be-
 const REQUEST_TIMEOUT_MS = 8000;
 const MIN_DELAY_MS = 500;
 
-// Resolve cache directory
+// Resolve directories
 const CACHE_DIR = path.resolve(__dirname, '../cache');
+const OUTPUT_DIR = path.resolve(__dirname, '../output');
+
 if (!fs.existsSync(CACHE_DIR)) {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
+}
+if (!fs.existsSync(OUTPUT_DIR)) {
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 }
 
 let lastRequestTime = 0;
@@ -37,7 +43,7 @@ async function politeDelay() {
 /**
  * Fetches a URL with local file caching, timeout, status check, and politeness delay.
  */
-async function fetchWithCache(url, cacheFileName, silent = false) {
+async function fetchWithCache(url, cacheFileName, silent = true) {
   const cachePath = path.join(CACHE_DIR, cacheFileName);
 
   if (fs.existsSync(cachePath)) {
@@ -109,7 +115,7 @@ async function discoverCataloguePages(startUrl = CATALOGUE_PAGE_1, maxPages = 3)
 
   while (currentUrl && pageIndex <= maxPages) {
     const cacheFileName = `catalogue-page-${pageIndex}.html`;
-    const { html } = await fetchWithCache(currentUrl, cacheFileName);
+    const { html } = await fetchWithCache(currentUrl, cacheFileName, false);
     const { bookEntries, nextUrl } = parseCataloguePage(html, currentUrl);
 
     discoveredBookEntries.push(...bookEntries);
@@ -156,16 +162,42 @@ function getBookCacheFileName(productUrl) {
 }
 
 /**
+ * Normalizes price text to numeric GBP value.
+ */
+function normalizePrice(priceText) {
+  if (!priceText) return 0;
+  const numericString = priceText.replace(/[^0-9.]/g, '');
+  const val = parseFloat(numericString);
+  return isNaN(val) ? 0 : Number(val.toFixed(2));
+}
+
+/**
+ * Zod validation schema for book records.
+ */
+const BookSchema = z.object({
+  title: z.string().min(1, 'Title cannot be empty'),
+  product_url: z.string().url('Product URL must be a valid URL'),
+  price_text: z.string().min(1, 'Price text cannot be empty'),
+  price_gbp: z.number().positive('Price in GBP must be a positive number'),
+  availability_text: z.string().min(1, 'Availability text cannot be empty'),
+  rating_text: z.string().min(1, 'Rating text cannot be empty'),
+  description: z.string().nullable().optional(),
+  source_page: z.string().url('Source page must be a valid URL'),
+  fetched_at: z.string().min(1, 'Fetched at timestamp is required')
+});
+
+/**
  * Extracts raw book details from a book detail page HTML.
  */
 function parseBookDetailPage(html, productUrl, sourcePage) {
   const $ = cheerio.load(html);
 
-  // 1. Title from product_main h1
+  // 1. Title
   const title = $('div.product_main h1').text().trim() || $('article.product_page h1').text().trim();
 
-  // 2. Price text
+  // 2. Raw price text & Normalized numeric price
   const price_text = $('div.product_main p.price_color').text().trim();
+  const price_gbp = normalizePrice(price_text);
 
   // 3. Availability text
   const rawAvailability = $('div.product_main p.instock.availability').text();
@@ -185,13 +217,14 @@ function parseBookDetailPage(html, productUrl, sourcePage) {
     }
   }
 
-  // 6. Provenance fields
+  // 6. Provenance
   const fetched_at = new Date().toISOString();
 
   return {
     title,
     product_url: productUrl,
     price_text,
+    price_gbp,
     availability_text,
     rating_text,
     description,
@@ -201,35 +234,62 @@ function parseBookDetailPage(html, productUrl, sourcePage) {
 }
 
 /**
- * Fetches and extracts all 60 book details.
+ * Scrapes, normalizes, validates with Zod, and saves books to output/books.json.
  */
-async function extractAllBookDetails() {
+async function scrapeAndValidateBooks() {
   const { uniqueEntries } = await discoverCataloguePages(CATALOGUE_PAGE_1, 3);
-  const rawBooks = [];
+  const rawRecordsMap = new Map();
 
   for (let i = 0; i < uniqueEntries.length; i++) {
     const entry = uniqueEntries[i];
     const cacheFileName = getBookCacheFileName(entry.url);
     const { html } = await fetchWithCache(entry.url, cacheFileName, true);
     const rawRecord = parseBookDetailPage(html, entry.url, entry.sourcePage);
-    rawBooks.push(rawRecord);
+    rawRecordsMap.set(rawRecord.product_url, rawRecord);
   }
 
-  console.log(`detail_pages=${rawBooks.length}`);
-  console.log('Sample raw record:');
-  console.log(JSON.stringify(rawBooks[0], null, 2));
+  const validBooks = [];
+  const invalidRecords = [];
 
-  return rawBooks;
+  for (const record of rawRecordsMap.values()) {
+    const parseResult = BookSchema.safeParse(record);
+    if (parseResult.success) {
+      validBooks.push(parseResult.data);
+    } else {
+      invalidRecords.push({
+        record,
+        errors: parseResult.error.format()
+      });
+    }
+  }
+
+  // Save outputs
+  const booksPath = path.join(OUTPUT_DIR, 'books.json');
+  const errorsPath = path.join(OUTPUT_DIR, 'errors.json');
+
+  fs.writeFileSync(booksPath, JSON.stringify(validBooks, null, 2), 'utf-8');
+  fs.writeFileSync(errorsPath, JSON.stringify(invalidRecords, null, 2), 'utf-8');
+
+  console.log(`detail_pages=${rawRecordsMap.size}`);
+  console.log(`valid_records=${validBooks.length}`);
+  console.log(`invalid_records=${invalidRecords.length}`);
+  console.log(`Saved valid records to: ${booksPath}`);
+  console.log(`Saved error records to: ${errorsPath}`);
+
+  return {
+    validBooks,
+    invalidRecords
+  };
 }
 
-async function runStage3() {
-  console.log('=== Running Stage 3: Extract Raw Book Details ===');
-  return await extractAllBookDetails();
+async function runStage4() {
+  console.log('=== Running Stage 4: Clean, Validate, Store ===');
+  return await scrapeAndValidateBooks();
 }
 
 if (require.main === module) {
-  runStage3().catch((err) => {
-    console.error('Stage 3 Error:', err.message);
+  runStage4().catch((err) => {
+    console.error('Stage 4 Error:', err.message);
     process.exit(1);
   });
 }
@@ -239,11 +299,14 @@ module.exports = {
   CATALOGUE_PAGE_1,
   USER_AGENT,
   CACHE_DIR,
+  OUTPUT_DIR,
+  BookSchema,
+  normalizePrice,
   fetchWithCache,
   parseCataloguePage,
   discoverCataloguePages,
   getBookCacheFileName,
   parseBookDetailPage,
-  extractAllBookDetails,
-  runStage3
+  scrapeAndValidateBooks,
+  runStage4
 };
