@@ -1,5 +1,7 @@
+require('dotenv').config();
 const express=require('express'); const swaggerUi=require('swagger-ui-express'); const openapi=require('./openapi.json');
 const db = require('./db');
+const supabase = require('./supabase');
 const app=express(); const PORT=3000; app.use(express.json());
 let tasks=[{id:1,title:'Learn REST APIs',done:false},{id:2,title:'Build CRUD endpoints',done:false},{id:3,title:'Test with Swagger',done:true}]; let nextId=4;
 app.get('/',(req,res)=>res.json({name:'Task API',version:'1.0',endpoints:['/tasks']}));
@@ -57,4 +59,7 @@ app.delete('/tasks/:id', (req, res) => {
   }
   res.status(204).send();
 });
-app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`));
+app.use('/docs',swaggerUi.serve,swaggerUi.setup(openapi)); app.listen(PORT,()=>{
+  console.log(`Task API: http://localhost:${PORT} | Swagger: http://localhost:${PORT}/docs`);
+  console.log(`Server running and connected to Supabase`);
+});
