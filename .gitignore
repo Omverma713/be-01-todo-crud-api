@@ -14,3 +14,7 @@ tasks.db-wal
 *.db
 *.db-shm
 *.db-wal
+
+# Scraper cache
+cache/
+scraper/cache/

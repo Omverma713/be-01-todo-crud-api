@@ -1,0 +1,4 @@
+# Local scraper cache and runtime output
+node_modules/
+cache/
+*.log
